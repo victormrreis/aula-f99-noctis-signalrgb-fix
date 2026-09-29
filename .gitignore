@@ -1,0 +1,23 @@
+# Local/editor files
+.vscode/
+.idea/
+*.log
+*.tmp
+Thumbs.db
+.DS_Store
+
+# Local test artifacts
+*.snapshot.json
+*.pcap
+*.pcapng
+Sinowealth_Keyboard_Controller.js
+
+# Release/build output
+dist/
+
+# Local publishing / maintenance helpers
+Publish-To-GitHub*.ps1
+Cleanup-Accidental-Publish-Scripts.ps1
+Hard-Recreate-GitHub-Repo.ps1
+*-CLEAN-RECREATE/
+dist/

@@ -1,0 +1,32 @@
+Sanitized SignalRGB diagnostic summary
+======================================
+
+Keyboard:
+  AULA F99 Noctis / Brazilian ABNT2
+
+USB:
+  VID:PID: 258A:010C
+  Product string: Gaming Keyboard
+  Manufacturer string: BY Tech
+
+Opened HID endpoint:
+  Interface: 1
+  Usage: 0x0001
+  Usage Page: 0xFF00
+  Collection: 0x0006
+
+Before patch:
+  Unknown Device ID: [195]
+  Model not found in library!
+  Unknown protocol for 195
+
+Internal model/device ID:
+  Decimal: 195
+  Hex: 0xC3
+
+After patch:
+  Device ID 195 is mapped to the existing F99 LED layout.
+  RGB control tested successfully.
+
+Privacy:
+  Windows username, local paths, USB instance path, and keyboard serial number are intentionally omitted.
