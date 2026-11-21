@@ -22,6 +22,9 @@ O plugin SinoWealth interno do SignalRGB já possui o layout RGB do **AULA F99**
 
 ## Receptor 2.4 GHz (dongle): RGB por tecla
 
+> [!WARNING]
+> **Ainda não recomendado.** O RGB por tecla pelo dongle 2.4 GHz funciona, mas a animação ainda fica bem travada (~21 quadros/s, contra ~44 no cabo). Para efeitos do SignalRGB, use o **cabo USB**. O plugin do dongle está incluído como experimento.
+
 Pelo receptor 2.4 GHz o teclado aparece como **`3554:FA09`** ("2.4G Wireless Receiver"). O plugin original do SignalRGB para esse ID mostra **“OEM Wireless Keyboard”** com um LED só (apenas cor sólida).
 
 O [`plugins/OEM_Keyboard_Wireless_Controller.js`](plugins/OEM_Keyboard_Wireless_Controller.js) substitui esse plugin (override do usuário) e mostra o teclado como **AULA F99 Noctis (2.4G)**, com o layout F99 completo, tecla por tecla.

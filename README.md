@@ -22,6 +22,9 @@ The stock SinoWealth controller already contains the **AULA F99** LED layout. Th
 
 ## 2.4 GHz receiver (dongle): per-key RGB
 
+> [!WARNING]
+> **Not recommended yet.** Per-key RGB over the 2.4 GHz dongle works, but animation is still quite choppy (~21 fps vs ~44 fps wired). For SignalRGB effects, use the **USB cable**. The dongle plugin is included as an experiment.
+
 Over the 2.4 GHz receiver the keyboard enumerates as **`3554:FA09`** ("2.4G Wireless Receiver"). The stock SignalRGB plugin for that ID shows it as **“OEM Wireless Keyboard”** with a single LED (solid color only).
 
 [`plugins/OEM_Keyboard_Wireless_Controller.js`](plugins/OEM_Keyboard_Wireless_Controller.js) replaces that plugin as a user override and shows the keyboard as **AULA F99 Noctis (2.4G)** with the full F99 per-key layout.
