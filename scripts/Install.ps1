@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-Write-Host '=== AULA F99 Noctis ABNT2 - SignalRGB 0xC3 fix ===' -ForegroundColor Cyan
+Write-Host '=== AULA F99 Noctis ABNT2 - SignalRGB fix (wired 0xC3 + 2.4G per-key) ===' -ForegroundColor Cyan
 Write-Host 'No keyboard firmware will be flashed.' -ForegroundColor DarkGray
 Write-Host 'No Windows keyboard registry mapping will be changed.' -ForegroundColor DarkGray
 Write-Host ''
@@ -8,6 +8,42 @@ Write-Host ''
 $documents = [Environment]::GetFolderPath('MyDocuments')
 $userPluginDir = Join-Path $documents 'WhirlwindFX\Plugins'
 $userPlugin = Join-Path $userPluginDir 'Sinowealth_Keyboard_Controller.js'
+
+# Close SignalRGB processes so plugins reload cleanly.
+Get-Process -ErrorAction SilentlyContinue |
+    Where-Object { $_.ProcessName -match 'Signal.?RGB|SignalRgb|Signal-x64' } |
+    ForEach-Object {
+        Write-Host "Closing $($_.ProcessName)..." -ForegroundColor Yellow
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+    }
+
+New-Item -ItemType Directory -Path $userPluginDir -Force | Out-Null
+
+# --- 2.4 GHz receiver (3554:FA09): per-key plugin -------------------------------
+# Installed first so the wired section's early exit cannot skip it.
+$wirelessName = 'OEM_Keyboard_Wireless_Controller.js'
+$wirelessSource = Join-Path $PSScriptRoot "..\plugins\$wirelessName"
+$wirelessPlugin = Join-Path $userPluginDir $wirelessName
+
+if (Test-Path $wirelessSource) {
+    if (Test-Path $wirelessPlugin) {
+        $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $wirelessBackup = "$wirelessPlugin.backup_$stamp"
+        Copy-Item $wirelessPlugin $wirelessBackup -Force
+        Write-Host "Existing 2.4G plugin backed up to:" -ForegroundColor DarkGray
+        Write-Host $wirelessBackup -ForegroundColor DarkGray
+    }
+
+    Copy-Item $wirelessSource $wirelessPlugin -Force
+    Write-Host '2.4G receiver plugin installed (per-key RGB over the dongle).' -ForegroundColor Green
+    Write-Host "User plugin: $wirelessPlugin" -ForegroundColor Green
+    Write-Host ''
+} else {
+    Write-Host "2.4G plugin not found next to this script ($wirelessSource); skipping it." -ForegroundColor Yellow
+    Write-Host ''
+}
+
+# --- Wired (258A:010C): add model ID 195 to the SinoWealth plugin ----------------
 
 # Locate the built-in/CDN plugin. Prefer the current main cache path.
 $candidates = @(
@@ -38,16 +74,6 @@ Open/update SignalRGB once, close it completely, then run this installer again.
 Write-Host "Source plugin:" -ForegroundColor DarkGray
 Write-Host $source -ForegroundColor DarkGray
 Write-Host ''
-
-# Close SignalRGB processes.
-Get-Process -ErrorAction SilentlyContinue |
-    Where-Object { $_.ProcessName -match 'Signal.?RGB|SignalRgb|Signal-x64' } |
-    ForEach-Object {
-        Write-Host "Closing $($_.ProcessName)..." -ForegroundColor Yellow
-        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
-    }
-
-New-Item -ItemType Directory -Path $userPluginDir -Force | Out-Null
 
 # Preserve any existing user override.
 if (Test-Path $userPlugin) {
