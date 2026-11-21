@@ -23,7 +23,13 @@ The stock SinoWealth controller already contains the **AULA F99** LED layout. Th
 ## 2.4 GHz receiver (dongle): per-key RGB
 
 > [!WARNING]
-> **Not recommended yet.** Per-key RGB over the 2.4 GHz dongle works, but animation is still quite choppy (~21 fps vs ~44 fps wired). For SignalRGB effects, use the **USB cable**. The dongle plugin is included as an experiment.
+> **Optional pre-release, still in development — not recommended yet.** Per-key RGB over the 2.4 GHz dongle works, but animation is still quite choppy (~21 fps vs ~44 fps wired). For SignalRGB effects, use the **USB cable**.
+>
+> The installer does **not** install it by default. To try it, download the [v1.1.0-beta.1 pre-release](https://github.com/victormrreis/aula-f99-noctis-signalrgb-fix/releases/tag/v1.1.0-beta.1) (or this repo) and run:
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\scripts\Install.ps1 -Dongle
+> ```
 
 Over the 2.4 GHz receiver the keyboard enumerates as **`3554:FA09`** ("2.4G Wireless Receiver"). The stock SignalRGB plugin for that ID shows it as **“OEM Wireless Keyboard”** with a single LED (solid color only).
 
@@ -63,7 +69,7 @@ Instead, `scripts/Install.ps1`:
 },
 ```
 
-4. Copies `plugins/OEM_Keyboard_Wireless_Controller.js` into the same user **Plugins** directory for the 2.4 GHz receiver, backing up any existing copy first.
+4. Only with `-Dongle`: copies the experimental `plugins/OEM_Keyboard_Wireless_Controller.js` into the same user **Plugins** directory for the 2.4 GHz receiver, backing up any existing copy first.
 5. Restarts are left to the user so SignalRGB reloads cleanly.
 
 No keyboard firmware is flashed and no Windows keyboard registry mapping is modified.

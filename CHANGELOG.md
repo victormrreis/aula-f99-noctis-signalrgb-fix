@@ -1,6 +1,8 @@
 # Changelog
 
-## v1.1.0
+## v1.1.0-beta.1 (pre-release, optional, in development)
+
+- The 2.4 GHz dongle plugin is **optional and experimental**: `Install.ps1` only installs it with `-Dongle`. Animation over the dongle is still choppy; the USB cable is recommended.
 
 - Adds `plugins/OEM_Keyboard_Wireless_Controller.js`: per-key RGB over the 2.4 GHz receiver (`3554:FA09`), which the stock plugin shows as a single-LED "OEM Wireless Keyboard". Protocol based on OpenRGB issue #5166.
 - Reuses the F99 layout: the receiver keycodes match the wired LED indexes.

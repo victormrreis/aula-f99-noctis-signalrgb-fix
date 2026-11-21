@@ -1,6 +1,11 @@
+param(
+    # Also install the experimental 2.4 GHz dongle per-key plugin (pre-release, still choppy).
+    [switch]$Dongle
+)
+
 $ErrorActionPreference = 'Stop'
 
-Write-Host '=== AULA F99 Noctis ABNT2 - SignalRGB fix (wired 0xC3 + 2.4G per-key) ===' -ForegroundColor Cyan
+Write-Host '=== AULA F99 Noctis ABNT2 - SignalRGB 0xC3 fix ===' -ForegroundColor Cyan
 Write-Host 'No keyboard firmware will be flashed.' -ForegroundColor DarkGray
 Write-Host 'No Windows keyboard registry mapping will be changed.' -ForegroundColor DarkGray
 Write-Host ''
@@ -19,13 +24,17 @@ Get-Process -ErrorAction SilentlyContinue |
 
 New-Item -ItemType Directory -Path $userPluginDir -Force | Out-Null
 
-# --- 2.4 GHz receiver (3554:FA09): per-key plugin -------------------------------
-# Installed first so the wired section's early exit cannot skip it.
+# --- 2.4 GHz receiver (3554:FA09): optional experimental per-key plugin ---------
+# Only with -Dongle. Installed first so the wired section's early exit cannot skip it.
 $wirelessName = 'OEM_Keyboard_Wireless_Controller.js'
 $wirelessSource = Join-Path $PSScriptRoot "..\plugins\$wirelessName"
 $wirelessPlugin = Join-Path $userPluginDir $wirelessName
 
-if (Test-Path $wirelessSource) {
+if (-not $Dongle) {
+    Write-Host '2.4G dongle plugin skipped (experimental). Re-run with -Dongle to install it.' -ForegroundColor DarkGray
+    Write-Host ''
+} elseif (Test-Path $wirelessSource) {
+    Write-Host '2.4G dongle plugin is EXPERIMENTAL: per-key works but animation is still choppy.' -ForegroundColor Yellow
     if (Test-Path $wirelessPlugin) {
         $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $wirelessBackup = "$wirelessPlugin.backup_$stamp"

@@ -23,7 +23,13 @@ O plugin SinoWealth interno do SignalRGB já possui o layout RGB do **AULA F99**
 ## Receptor 2.4 GHz (dongle): RGB por tecla
 
 > [!WARNING]
-> **Ainda não recomendado.** O RGB por tecla pelo dongle 2.4 GHz funciona, mas a animação ainda fica bem travada (~21 quadros/s, contra ~44 no cabo). Para efeitos do SignalRGB, use o **cabo USB**. O plugin do dongle está incluído como experimento.
+> **Pré-release opcional, ainda em desenvolvimento — ainda não recomendado.** O RGB por tecla pelo dongle 2.4 GHz funciona, mas a animação ainda fica bem travada (~21 quadros/s, contra ~44 no cabo). Para efeitos do SignalRGB, use o **cabo USB**.
+>
+> O instalador **não** instala o dongle por padrão. Para testar, baixe a [pré-release v1.1.0-beta.1](https://github.com/victormrreis/aula-f99-noctis-signalrgb-fix/releases/tag/v1.1.0-beta.1) (ou este repo) e rode:
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\scripts\Install.ps1 -Dongle
+> ```
 
 Pelo receptor 2.4 GHz o teclado aparece como **`3554:FA09`** ("2.4G Wireless Receiver"). O plugin original do SignalRGB para esse ID mostra **“OEM Wireless Keyboard”** com um LED só (apenas cor sólida).
 
@@ -56,7 +62,7 @@ O `scripts/Install.ps1`:
 3. adiciona somente a associação do Device ID `195`;
 4. não altera firmware do teclado;
 5. não altera o Registro do Windows;
-6. copia `plugins/OEM_Keyboard_Wireless_Controller.js` para a mesma pasta de plugins do usuário (receptor 2.4 GHz), fazendo backup de uma cópia anterior.
+6. só com `-Dongle`: copia o plugin experimental `plugins/OEM_Keyboard_Wireless_Controller.js` para a mesma pasta de plugins do usuário (receptor 2.4 GHz), fazendo backup de uma cópia anterior.
 
 ## Instalação
 
