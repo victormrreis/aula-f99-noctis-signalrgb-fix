@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 
-Write-Host '=== Remove AULA F99 Noctis SignalRGB 0xC3 override ===' -ForegroundColor Cyan
+Write-Host '=== Remove AULA F99 Noctis SignalRGB overrides (wired 0xC3 + 2.4G) ===' -ForegroundColor Cyan
 
 $documents = [Environment]::GetFolderPath('MyDocuments')
 $userPluginDir = Join-Path $documents 'WhirlwindFX\Plugins'
@@ -33,6 +33,33 @@ if ($backups.Count -gt 0) {
 } else {
     Write-Host 'No previous custom plugin backup found.' -ForegroundColor DarkGray
     Write-Host 'SignalRGB will use its built-in SinoWealth plugin after restart.' -ForegroundColor Green
+}
+
+# --- 2.4 GHz receiver plugin ------------------------------------------------------
+$wirelessPlugin = Join-Path $userPluginDir 'OEM_Keyboard_Wireless_Controller.js'
+
+$wirelessBackups = @(
+    Get-ChildItem `
+        -Path $userPluginDir `
+        -Filter 'OEM_Keyboard_Wireless_Controller.js.backup_*' `
+        -File `
+        -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending
+)
+
+Write-Host ''
+
+if (Test-Path $wirelessPlugin) {
+    Remove-Item $wirelessPlugin -Force
+    Write-Host 'Custom 2.4G receiver plugin removed.' -ForegroundColor Yellow
+}
+
+if ($wirelessBackups.Count -gt 0) {
+    Copy-Item $wirelessBackups[0].FullName $wirelessPlugin -Force
+    Write-Host 'Restored the previous 2.4G plugin backup:' -ForegroundColor Green
+    Write-Host $wirelessBackups[0].FullName -ForegroundColor Green
+} else {
+    Write-Host 'SignalRGB will use its built-in 2.4G (OEM Wireless Keyboard) plugin after restart.' -ForegroundColor Green
 }
 
 Write-Host ''

@@ -8,7 +8,7 @@ Correção comunitária testada em um **AULA F99 Noctis ABNT2** que aparecia no 
 - Layout: **ABNT2**
 - USB VID:PID: **`258A:010C`**
 - Device/model ID interno SinoWealth: **`195` decimal / `0xC3`**
-- Conexão testada: **USB com fio**
+- Conexões testadas: **USB com fio** e **receptor 2.4 GHz** (`3554:FA09`, por tecla, veja abaixo)
 
 O SignalRGB abria corretamente o endpoint HID do teclado, mas registrava:
 
@@ -20,6 +20,23 @@ Unknown protocol for 195
 
 O plugin SinoWealth interno do SignalRGB já possui o layout RGB do **AULA F99**. Este fix adiciona `195 / 0xC3` como outra variante do F99 e reutiliza o layout existente.
 
+## Receptor 2.4 GHz (dongle): RGB por tecla
+
+Pelo receptor 2.4 GHz o teclado aparece como **`3554:FA09`** ("2.4G Wireless Receiver"). O plugin original do SignalRGB para esse ID mostra **“OEM Wireless Keyboard”** com um LED só (apenas cor sólida).
+
+O [`plugins/OEM_Keyboard_Wireless_Controller.js`](plugins/OEM_Keyboard_Wireless_Controller.js) substitui esse plugin (override do usuário) e mostra o teclado como **AULA F99 Noctis (2.4G)**, com o layout F99 completo, tecla por tecla.
+
+- Protocolo: relatórios de saída de 20 bytes na interface 1, usage page `0xFF02`. As cores vão em grupos `[R, G, B, quantidade, códigos das teclas…]` divididos em vários pacotes. Baseado na engenharia reversa da comunidade na [issue #5166 do OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB/-/work_items/5166).
+- Os códigos das teclas no receptor são os mesmos índices de LED do F99 com fio, então o layout é o mesmo nas duas conexões.
+- A banda do sem fio é limitada: um efeito movimentado precisa de ~10–40 pacotes por quadro. Duas opções do aparelho ajudam:
+  - **2.4G Color Precision**: menos precisão junta cores parecidas em menos pacotes (mais fluido).
+  - **2.4G Packet Delay**: aumente se as teclas piscarem ou a digitação atrasar.
+- Quando o teclado todo está numa cor só, vai um único pacote de cor sólida.
+- A posição do aparelho no canvas de **Layout** do SignalRGB é escolhida pelo SignalRGB, não pelo plugin. Se ficar num lugar estranho, ajuste uma vez; o SignalRGB guarda a posição.
+- As teclas extras do ABNT2 não estão mapeadas, igual ao layout com fio.
+
+Testado num AULA F99 Noctis ABNT2 com SignalRGB 2.5.86.
+
 ## Como funciona
 
 Este repositório **não redistribui o plugin SinoWealth completo do SignalRGB**.
@@ -30,7 +47,8 @@ O `scripts/Install.ps1`:
 2. copia esse arquivo para a pasta de plugins do usuário;
 3. adiciona somente a associação do Device ID `195`;
 4. não altera firmware do teclado;
-5. não altera o Registro do Windows.
+5. não altera o Registro do Windows;
+6. copia `plugins/OEM_Keyboard_Wireless_Controller.js` para a mesma pasta de plugins do usuário (receptor 2.4 GHz), fazendo backup de uma cópia anterior.
 
 ## Instalação
 
