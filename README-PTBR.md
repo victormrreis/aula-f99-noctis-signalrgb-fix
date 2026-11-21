@@ -34,6 +34,7 @@ O [`plugins/OEM_Keyboard_Wireless_Controller.js`](plugins/OEM_Keyboard_Wireless_
 - Mesmo assim o 2.4G fica em ~21 quadros/s (cabo: ~44), então efeitos rápidos ficam menos fluidos que no cabo. Baixar para 8 pacotes não mudou nada, o que aponta para o próprio teclado/rádio.
 - Opções do aparelho:
   - **2.4G Smoothness / Colors**: orçamento de pacotes por quadro. *Balanced (10 packets)* é o padrão; *Smoothest (8)* é o mais seguro; *More colors (13)* pode travar.
+  - **2.4G Motion Smoothing**: Off / Light / Medium (padrão) / Strong. Mistura cada quadro com o anterior para as cores deslizarem a ~21 quadros/s em vez de pular; mais forte reage um pouco depois.
   - **2.4G Log Stats**: registra quadros/s, pacotes por quadro e tamanho da paleta no console do aparelho a cada 5 s.
 - O comando de cor sólida (`0x23`) anima mal neste teclado, então quadros de uma cor só também vão por tecla.
 - A posição do aparelho no canvas de **Layout** do SignalRGB é escolhida pelo SignalRGB, não pelo plugin. Se ficar num lugar estranho, ajuste uma vez; o SignalRGB guarda a posição.

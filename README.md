@@ -34,6 +34,7 @@ Over the 2.4 GHz receiver the keyboard enumerates as **`3554:FA09`** ("2.4G Wire
 - Even so, 2.4G tops out around ~21 fps (wired: ~44 fps), so fast effects look less fluid than on the cable. Dropping to 8 packets did not change it, which points at the keyboard/radio itself.
 - Device settings:
   - **2.4G Smoothness / Colors**: packet budget per frame. *Balanced (10 packets)* is the default; *Smoothest (8)* is safest; *More colors (13)* may stutter.
+  - **2.4G Motion Smoothing**: Off / Light / Medium (default) / Strong. Blends each frame with the previous one so colors glide at ~21 fps instead of jumping; stronger reacts a bit later.
   - **2.4G Log Stats**: logs fps, packets/frame and palette size to the device console every 5 s.
 - The solid-color command (`0x23`) animates poorly on this keyboard, so single-color frames are sent per-key too.
 - The device position on the SignalRGB **Layout** canvas is chosen by SignalRGB, not by plugins. If it lands in an odd spot, move it once; SignalRGB remembers it.

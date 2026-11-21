@@ -45,3 +45,4 @@ Inside SignalRGB (device console, 2.4G Log Stats)
   device.setFrameRateTarget(60): 21.3 fps, 16.7 ms idle -> current setting
   8 vs 10 packets per frame:    no visible difference reported -> remaining stutter is the 2.4G
                                 keyboard/radio itself (~21 fps vs ~44 fps wired)
+  motion smoothing (Medium):     user reported a small improvement; kept as default

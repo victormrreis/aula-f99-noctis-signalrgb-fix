@@ -30,6 +30,7 @@ shutdownColor:readonly
 LightingMode:readonly
 forcedColor:readonly
 wirelessQuality:readonly
+motionSmoothing:readonly
 debugStats:readonly
 */
 export function ControllableParameters(){
@@ -38,6 +39,7 @@ export function ControllableParameters(){
 		{property:"LightingMode", group:"lighting", label:"Lighting Mode", description: "Determines where the device's RGB comes from. Canvas will pull from the active Effect, while Forced will override it to a specific color", type:"combobox", values:["Canvas", "Forced"], default:"Canvas"},
 		{property:"forcedColor", group:"lighting", label:"Forced Color", description: "The color used when 'Forced' Lighting Mode is enabled", min:"0", max:"360", type:"color", default:"#009bde"},
 		{property:"wirelessQuality", group:"", label:"2.4G Smoothness / Colors", description: "The 2.4G link carries ~1 packet every 3 ms. Each frame is reduced to the best palette that fits the packet budget: fewer packets = smoother, more packets = more colors per frame.", type:"combobox", values:Object.keys(BUDGETS), default:DEFAULT_BUDGET},
+		{property:"motionSmoothing", group:"", label:"2.4G Motion Smoothing", description: "Blends each frame with the previous one so color changes glide instead of jumping at the ~21 fps the 2.4G link allows. Stronger = smoother but reacts a little later.", type:"combobox", values:Object.keys(SMOOTHING), default:DEFAULT_SMOOTHING},
 		{property:"debugStats", group:"", label:"2.4G Log Stats", description: "Writes frame rate, packets per frame and palette size to the device console every 5 seconds.", type:"boolean", default:"false"},
 	];
 }
@@ -51,6 +53,16 @@ const BUDGETS = {
 	"Exact colors (slow)": 40,
 };
 const DEFAULT_BUDGET = "Balanced (10 packets)";
+
+// Fraction of the new color taken each frame (1 = no smoothing).
+const SMOOTHING = {
+	"Off": 1,
+	"Light": 0.6,
+	"Medium": 0.4,
+	"Strong": 0.25,
+};
+const DEFAULT_SMOOTHING = "Medium";
+let smoothed = null; // per-key [r,g,b] floats
 const MIN_FRAME_MS = 40;    // never more than ~25 fps
 // Calibrated: the link stays smooth below ~230 packets/s (10 packets at ~22 fps was smooth).
 // Frames are spaced by their size; inside a frame packets go back to back, because
@@ -158,6 +170,10 @@ function queryModel() {
 function readColors(overrideColor) {
 	const fixed = overrideColor ? hexToRgb(overrideColor) : (LightingMode === "Forced" ? hexToRgb(forcedColor) : null);
 	const lit = []; // {r,g,b,code}
+	// No smoothing for shutdown/override colors: they must land exactly.
+	const alpha = overrideColor ? 1 : (SMOOTHING[motionSmoothing] || SMOOTHING[DEFAULT_SMOOTHING]);
+
+	if (!smoothed) { smoothed = F99.vLeds.map(() => null); }
 
 	for (let i = 0; i < F99.vLeds.length; i++) {
 		let c = fixed;
@@ -165,6 +181,24 @@ function readColors(overrideColor) {
 		if (!c) {
 			const [x, y] = F99.vLedPositions[i];
 			c = device.color(x, y);
+		}
+
+		const prev = smoothed[i];
+
+		if (prev && alpha < 1) {
+			const next = [
+				prev[0] + (c[0] - prev[0]) * alpha,
+				prev[1] + (c[1] - prev[1]) * alpha,
+				prev[2] + (c[2] - prev[2]) * alpha,
+			];
+
+			// Snap when close so a static effect settles and stops resending.
+			for (let k = 0; k < 3; k++) { if (Math.abs(next[k] - c[k]) < 2) { next[k] = c[k]; } }
+
+			smoothed[i] = next;
+			c = next.map(Math.round);
+		} else {
+			smoothed[i] = [c[0], c[1], c[2]];
 		}
 
 		if (c[0] < BLACK_LEVEL && c[1] < BLACK_LEVEL && c[2] < BLACK_LEVEL) { continue; }
