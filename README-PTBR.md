@@ -28,10 +28,12 @@ O [`plugins/OEM_Keyboard_Wireless_Controller.js`](plugins/OEM_Keyboard_Wireless_
 
 - Protocolo: relatórios de saída de 20 bytes na interface 1, usage page `0xFF02`. As cores vão em grupos `[R, G, B, quantidade, códigos das teclas…]` divididos em vários pacotes. Baseado na engenharia reversa da comunidade na [issue #5166 do OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB/-/work_items/5166).
 - Os códigos das teclas no receptor são os mesmos índices de LED do F99 com fio, então o layout é o mesmo nas duas conexões.
-- A banda do sem fio é limitada: um efeito movimentado precisa de ~10–40 pacotes por quadro. Duas opções do aparelho ajudam:
-  - **2.4G Color Precision**: menos precisão junta cores parecidas em menos pacotes (mais fluido).
-  - **2.4G Packet Delay**: aumente se as teclas piscarem ou a digitação atrasar.
-- Quando o teclado todo está numa cor só, vai um único pacote de cor sólida.
+- O gargalo é o rádio 2.4G (medido, veja [`diagnostics/2.4g-receiver-measurements.txt`](diagnostics/2.4g-receiver-measurements.txt)): a animação só fica fluida com quadros de até ~10 pacotes e abaixo de ~230 pacotes/s. Uma cor diferente em cada tecla precisaria de ~38 pacotes.
+- Por isso cada quadro vira uma **paleta adaptativa** (median cut) que cabe num orçamento de pacotes, e os quadros são espaçados para ~180 pacotes/s (~18 quadros/s com 10 pacotes).
+- Opções do aparelho:
+  - **2.4G Smoothness / Colors**: orçamento de pacotes por quadro. *Balanced (10 packets)* é o padrão; *Smoothest (8)* é o mais seguro; *More colors (13)* pode travar.
+  - **2.4G Log Stats**: registra quadros/s, pacotes por quadro e tamanho da paleta no console do aparelho a cada 5 s.
+- O comando de cor sólida (`0x23`) anima mal neste teclado, então quadros de uma cor só também vão por tecla.
 - A posição do aparelho no canvas de **Layout** do SignalRGB é escolhida pelo SignalRGB, não pelo plugin. Se ficar num lugar estranho, ajuste uma vez; o SignalRGB guarda a posição.
 - As teclas extras do ABNT2 não estão mapeadas, igual ao layout com fio.
 

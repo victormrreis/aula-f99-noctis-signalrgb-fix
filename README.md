@@ -28,10 +28,12 @@ Over the 2.4 GHz receiver the keyboard enumerates as **`3554:FA09`** ("2.4G Wire
 
 - Protocol: 20-byte output reports on interface 1, usage page `0xFF02`. Per-key payload is a stream of `[R, G, B, count, keycodes…]` groups split across packets. Based on community reverse engineering in [OpenRGB issue #5166](https://gitlab.com/CalcProgrammer1/OpenRGB/-/work_items/5166).
 - The receiver keycodes are the same values as the wired SinoWealth F99 LED indexes, so the same layout is used on both connections.
-- Wireless bandwidth is limited: a busy effect needs ~10–40 packets per frame. Two device settings help:
-  - **2.4G Color Precision**: lower groups similar colors into fewer packets (smoother).
-  - **2.4G Packet Delay**: raise it if keys flicker or typing lags.
-- A whole-board single color is sent as one solid-color packet.
+- The 2.4G link is the bottleneck (measured, see [`diagnostics/2.4g-receiver-measurements.txt`](diagnostics/2.4g-receiver-measurements.txt)): animation stays smooth only with frames of up to ~10 packets and below ~230 packets/s. A frame with a unique color per key would need ~38 packets.
+- So each frame is reduced to an **adaptive palette** (median cut) that fits a packet budget, and frames are spaced to ~180 packets/s (~18 fps at 10 packets).
+- Device settings:
+  - **2.4G Smoothness / Colors**: packet budget per frame. *Balanced (10 packets)* is the default; *Smoothest (8)* is safest; *More colors (13)* may stutter.
+  - **2.4G Log Stats**: logs fps, packets/frame and palette size to the device console every 5 s.
+- The solid-color command (`0x23`) animates poorly on this keyboard, so single-color frames are sent per-key too.
 - The device position on the SignalRGB **Layout** canvas is chosen by SignalRGB, not by plugins. If it lands in an odd spot, move it once; SignalRGB remembers it.
 - The extra ABNT2 keys are not mapped, same as the wired layout.
 

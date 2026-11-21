@@ -1,0 +1,38 @@
+AULA F99 Noctis ABNT2 - wired vs 2.4 GHz receiver measurements
+===============================================================
+Measured 2026-11-21 with SignalRGB closed, using a direct HID test harness.
+
+Wired (258A:010C)
+  RGB channel:   interface 1, usage page 0xFF00, collection 6, feature report 0x06, 520 bytes
+  Frame:         all 99 keys in one feature report (06 08 00 00 01 00 7A 01 + RGB at index*3)
+  Timing:        HidD_SetFeature avg ~12 ms per full frame -> ~44 fps, exact colors
+  Note:          no 0xFF02 / 20-byte channel exists on the wired interface
+
+2.4 GHz receiver (3554:FA09)
+  RGB channel:   interface 1, usage page 0xFF02, collection 1, 20-byte output/input reports
+                 (largest feature report is 8 bytes, id 6, on usage page 0xFF04)
+  Model query:   OUT 13 05 01 00 .. 19
+                 IN  13 05 01 00 0A 03 00 00 00 03 C3 ..   -> byte 10 = 0xC3 (195), same ID as wired
+                 IN  13 0A 01 00 04 05 64 01 ..            -> likely battery: 0x64 = 100 %, 01 = charging
+  Acks:          none; LED packets get no per-packet or per-frame reply
+  Write pacing:  receiver accepts ~1 packet / 3 ms (2 packets, then ~5.3 ms block)
+  Frame model:   every message replaces the whole frame; keys not listed go dark
+                 (full board blue, then only Esc red -> only Esc lit). No diff updates possible.
+  Keycodes:      identical to the wired F99 LED indexes (col*6 + row)
+
+Visual calibration (user watching the keyboard, rainbow animations, 4 s each)
+  solid 0x23, ~330 pkt/s                    -> stutters
+  solid 0x23, paced to 30 fps               -> stutters  (solid command itself animates poorly)
+  per-key  8 pkt/frame, 29 fps (~232 pkt/s) -> smooth
+  per-key  8 pkt/frame, 19 fps (paced)      -> smooth
+  per-key 10 pkt/frame, 22 fps (~225 pkt/s) -> smooth
+  per-key 11 pkt/frame, 21 fps (~234 pkt/s) -> stutters
+  per-key 13 pkt/frame, 20 fps (~260 pkt/s) -> stutters
+  per-key 13 pkt/frame, 13 fps (paced)      -> stutters
+
+Plugin settings derived from this
+  - packet budget per frame: 10 (default), adaptive median-cut palette to fit it
+  - frame spacing: max(40 ms, packets x 5.5 ms)  -> <= ~180 packets/s
+  - 2 ms pause between packets inside a frame
+  - solid command only used for an all-black frame
+  Result in SignalRGB: smooth animation (confirmed by the user).

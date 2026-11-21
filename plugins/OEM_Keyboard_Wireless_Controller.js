@@ -1,14 +1,19 @@
 // User override of SignalRGB's built-in OEM_Keyboard_Wireless_Controller.js
 // AULA F99 Noctis over its 2.4 GHz receiver (VID 0x3554 / PID 0xFA09), per-key RGB.
 //
-// Protocol (from OpenRGB issue #5166 / MR !3027, community reverse engineering):
+// Protocol (OpenRGB issue #5166 / MR !3027, confirmed on hardware):
 //   20-byte output report on interface 1, usage page 0xFF02, usage 0x0002
 //   [0]=0x13  [1]=0x88 (LED data)  [2]=total packets  [3]=packet index (0-based)
 //   [4]=mode|len : 0x10+len = per-key, 0x23 = solid RGB
 //   [5..18]=14-byte payload   [19]=sum(bytes 0..18) & 0xFF
-//   Per-key payload is a stream of groups [R, G, B, count, keycode x count], split
-//   across packets. Keys that are not listed go dark.
+//   Per-key payload: stream of groups [R, G, B, count, keycode x count] split across
+//   packets. Every message replaces the whole frame: keys not listed go dark.
 //   Keycodes are identical to the wired SinoWealth F99 LED indexes (col*6 + row).
+//   Model query: 13 05 01 00 .. -> reply byte 10 = model ID (0xC3 = F99 Noctis).
+//
+// Measured on hardware: the receiver accepts ~1 packet / 3 ms and gives no per-packet
+// acknowledgement. A frame with a unique color per key needs ~38 packets (~115 ms),
+// so each frame is reduced to an adaptive palette that fits a fixed packet budget.
 //
 // Remove this file from Documents\WhirlwindFX\Plugins to go back to the stock plugin.
 export function Name() { return "AULA F99 Noctis (2.4G)"; }
@@ -24,18 +29,33 @@ export function ImageUrl() { return "https://assets.signalrgb.com/devices/brands
 shutdownColor:readonly
 LightingMode:readonly
 forcedColor:readonly
-colorPrecision:readonly
-packetDelay:readonly
+wirelessQuality:readonly
+debugStats:readonly
 */
 export function ControllableParameters(){
 	return [
 		{property:"shutdownColor", group:"lighting", label:"Shutdown Color", description: "This color is applied to the device when the System, or SignalRGB is shutting down", min:"0", max:"360", type:"color", default:"#000000"},
 		{property:"LightingMode", group:"lighting", label:"Lighting Mode", description: "Determines where the device's RGB comes from. Canvas will pull from the active Effect, while Forced will override it to a specific color", type:"combobox", values:["Canvas", "Forced"], default:"Canvas"},
 		{property:"forcedColor", group:"lighting", label:"Forced Color", description: "The color used when 'Forced' Lighting Mode is enabled", min:"0", max:"360", type:"color", default:"#009bde"},
-		{property:"colorPrecision", group:"", label:"2.4G Color Precision", description: "Lower precision groups similar colors so fewer wireless packets are needed per frame (smoother effects). Full sends exact colors but updates slower.", type:"combobox", values:["Low (fastest)", "Medium", "High", "Full"], default:"Medium"},
-		{property:"packetDelay", group:"", label:"2.4G Packet Delay (ms)", description: "Pause between wireless packets. Raise it if keys flicker or the keyboard lags.", step:"1", type:"number", min:"1", max:"10", default:"3"},
+		{property:"wirelessQuality", group:"", label:"2.4G Smoothness / Colors", description: "The 2.4G link carries ~1 packet every 3 ms. Each frame is reduced to the best palette that fits the packet budget: fewer packets = smoother, more packets = more colors per frame.", type:"combobox", values:Object.keys(BUDGETS), default:DEFAULT_BUDGET},
+		{property:"debugStats", group:"", label:"2.4G Log Stats", description: "Writes frame rate, packets per frame and palette size to the device console every 5 seconds.", type:"boolean", default:"false"},
 	];
 }
+
+// Packet budget per frame. Calibrated on hardware: frames of up to ~10 packets animate
+// smoothly; 11+ packets, or flooding the link, make the keyboard stutter.
+const BUDGETS = {
+	"Smoothest (8 packets)": 8,
+	"Balanced (10 packets)": 10,
+	"More colors (13 packets, may stutter)": 13,
+	"Exact colors (slow)": 40,
+};
+const DEFAULT_BUDGET = "Balanced (10 packets)";
+const MIN_FRAME_MS = 40;    // never more than ~25 fps
+// Calibrated: the link stays smooth below ~230 packets/s. Keep ~180/s for headroom by
+// spacing frames according to their size.
+const PACKET_INTERVAL_MS = 5.5;
+let nextFrameTime = 0;
 
 const F99 = {
 	vLedNames: [
@@ -65,17 +85,24 @@ const F99 = {
 	size: [18, 6],
 };
 
-const KEEPALIVE_MS = 500;
+const KEEPALIVE_MS = 500;   // resend an unchanged frame this often
+const BLACK_LEVEL = 6;      // channels this dark are treated as off (saves packets)
+
 let lastFrameKey = "";
 let lastSendTime = 0;
+const stats = { since: 0, frames: 0, packets: 0, colors: 0, sendMs: 0 };
 
 export function Initialize() {
 	device.setName("AULA F99 Noctis (2.4G)");
 	device.setSize(F99.size);
 	device.setControllableLeds(F99.vLedNames, F99.vLedPositions);
 	device.setImageFromUrl("https://assets.signalrgb.com/devices/brands/aula/keyboards/f99.png");
-	device.log(`AULA F99 Noctis 2.4G: per-key mode, ${F99.vLeds.length} keys`);
+
+	const model = queryModel();
+	device.log(`AULA F99 2.4G: model ID ${model === null ? "unknown" : "0x" + model.toString(16).toUpperCase()}, per-key, ${F99.vLeds.length} keys`);
+
 	lastFrameKey = "";
+	stats.since = Date.now();
 }
 
 export function Render() {
@@ -87,60 +114,135 @@ export function Shutdown(SystemSuspending) {
 	sendFrame(color, true);
 }
 
-function quantStep() {
-	switch (colorPrecision) {
-	case "Low (fastest)": return 64;
-	case "High": return 8;
-	case "Full": return 1;
-	default: return 24;
-	}
+export function onwirelessQualityChanged() {
+	lastFrameKey = "";
 }
 
-function quantize(v, step) {
-	if (step <= 1) { return v; }
-	const q = Math.round(v / step) * step;
+// --- model query -------------------------------------------------------------------
+function queryModel() {
+	try {
+		const q = new Array(20).fill(0);
+		q[0] = 0x13; q[1] = 0x05; q[2] = 0x01;
+		q[19] = checksum(q);
+		device.write(q, 20);
 
-	return q > 255 ? 255 : q;
+		for (let i = 0; i < 4; i++) {
+			const r = device.read([0x00], 20, 100);
+
+			if (r && r.length >= 11 && r[0] === 0x13 && r[1] === 0x05) {
+				return r[10];
+			}
+		}
+	} catch (e) {
+		device.log(`AULA F99 2.4G: model query failed (${e})`);
+	}
+
+	return null;
+}
+
+// --- frame building ----------------------------------------------------------------
+function readColors(overrideColor) {
+	const fixed = overrideColor ? hexToRgb(overrideColor) : (LightingMode === "Forced" ? hexToRgb(forcedColor) : null);
+	const lit = []; // {r,g,b,code}
+
+	for (let i = 0; i < F99.vLeds.length; i++) {
+		let c = fixed;
+
+		if (!c) {
+			const [x, y] = F99.vLedPositions[i];
+			c = device.color(x, y);
+		}
+
+		if (c[0] < BLACK_LEVEL && c[1] < BLACK_LEVEL && c[2] < BLACK_LEVEL) { continue; }
+
+		lit.push({ r: c[0], g: c[1], b: c[2], code: F99.vLeds[i] });
+	}
+
+	return lit;
+}
+
+// Median-cut palette: split the box with the widest channel range until maxColors.
+function palettize(lit, maxColors) {
+	const exact = new Map();
+
+	for (const p of lit) {
+		const k = (p.r << 16) | (p.g << 8) | p.b;
+
+		if (!exact.has(k)) { exact.set(k, []); }
+
+		exact.get(k).push(p.code);
+	}
+
+	if (exact.size <= maxColors) {
+		return [...exact.entries()].map(([k, codes]) => ({ r: (k >> 16) & 255, g: (k >> 8) & 255, b: k & 255, codes }));
+	}
+
+	let boxes = [lit.slice()];
+
+	while (boxes.length < maxColors) {
+		let best = -1, bestRange = 0, bestCh = "r";
+
+		for (let i = 0; i < boxes.length; i++) {
+			const box = boxes[i];
+
+			if (box.length < 2) { continue; }
+
+			for (const ch of ["r", "g", "b"]) {
+				let lo = 255, hi = 0;
+
+				for (const p of box) { if (p[ch] < lo) { lo = p[ch]; } if (p[ch] > hi) { hi = p[ch]; } }
+
+				// Green weighs more for perceived difference.
+				const range = (hi - lo) * (ch === "g" ? 1.2 : 1);
+
+				if (range > bestRange) { bestRange = range; best = i; bestCh = ch; }
+			}
+		}
+
+		if (best < 0 || bestRange === 0) { break; }
+
+		const box = boxes[best].sort((a, b) => a[bestCh] - b[bestCh]);
+		const mid = box.length >> 1;
+		boxes.splice(best, 1, box.slice(0, mid), box.slice(mid));
+	}
+
+	return boxes.map((box) => {
+		let r = 0, g = 0, b = 0;
+
+		for (const p of box) { r += p.r; g += p.g; b += p.b; }
+
+		const n = box.length;
+
+		return { r: Math.round(r / n), g: Math.round(g / n), b: Math.round(b / n), codes: box.map((p) => p.code) };
+	});
 }
 
 function sendFrame(overrideColor, force) {
-	const step = quantStep();
-	const groups = new Map(); // "r,g,b" -> [keycodes]
-
-	for (let i = 0; i < F99.vLeds.length; i++) {
-		let color;
-
-		if (overrideColor) {
-			color = hexToRgb(overrideColor);
-		} else if (LightingMode === "Forced") {
-			color = hexToRgb(forcedColor);
-		} else {
-			const [x, y] = F99.vLedPositions[i];
-			color = device.color(x, y);
-		}
-
-		const r = quantize(color[0], step), g = quantize(color[1], step), b = quantize(color[2], step);
-
-		if (r === 0 && g === 0 && b === 0) { continue; } // unlisted keys go dark
-
-		const k = `${r},${g},${b}`;
-
-		if (!groups.has(k)) { groups.set(k, []); }
-
-		groups.get(k).push(F99.vLeds[i]);
+	if (!force && Date.now() < nextFrameTime) {
+		return;
 	}
 
-	// Build payload stream: [R, G, B, count, codes...]
+	const lit = readColors(overrideColor);
+	const budget = BUDGETS[wirelessQuality] || BUDGETS[DEFAULT_BUDGET];
+	// payload bytes = 4 per color + 1 per lit key; must fit 14 bytes x budget
+	const maxColors = Math.max(1, Math.floor((14 * budget - lit.length) / 4));
+	const palette = palettize(lit, maxColors);
+
+	// Merge entries that ended up with the same averaged color.
+	const merged = new Map();
+
+	for (const e of palette) {
+		const k = (e.r << 16) | (e.g << 8) | e.b;
+
+		if (merged.has(k)) { merged.get(k).codes.push(...e.codes); } else { merged.set(k, e); }
+	}
+
 	const stream = [];
-	const keys = [...groups.keys()].sort();
 
-	for (const k of keys) {
-		const codes = groups.get(k);
-		const [r, g, b] = k.split(",").map(Number);
-
-		for (let off = 0; off < codes.length; off += 255) {
-			const part = codes.slice(off, off + 255);
-			stream.push(r, g, b, part.length, ...part);
+	for (const e of merged.values()) {
+		for (let off = 0; off < e.codes.length; off += 255) {
+			const part = e.codes.slice(off, off + 255);
+			stream.push(e.r, e.g, e.b, part.length, ...part);
 		}
 	}
 
@@ -154,37 +256,45 @@ function sendFrame(overrideColor, force) {
 	lastFrameKey = frameKey;
 	lastSendTime = now;
 
+	let packets;
+
+	// The solid-color command (0x23) animates poorly on this keyboard, so it is only
+	// used to turn everything off; single-color frames go out as per-key (8 packets).
 	if (stream.length === 0) {
 		writeSolid([0, 0, 0]);
-
-		return;
+		packets = 1;
+	} else {
+		packets = writePerKey(stream);
 	}
 
-	// Whole board one color -> a single solid-color packet instead of ~8 per-key packets.
-	if (groups.size === 1 && [...groups.values()][0].length === F99.vLeds.length) {
-		writeSolid(keys[0].split(",").map(Number));
+	nextFrameTime = now + Math.max(MIN_FRAME_MS, packets * PACKET_INTERVAL_MS);
 
-		return;
-	}
+	logStats(packets, merged.size, Date.now() - now);
+}
 
+function writePerKey(stream) {
 	const total = Math.ceil(stream.length / 14);
-	const delay = Math.max(1, Math.min(10, Number(packetDelay) || 3));
 
 	for (let p = 0; p < total; p++) {
-		const chunk = stream.slice(p * 14, p * 14 + 14);
 		const packet = new Array(20).fill(0);
 		packet[0] = 0x13;
 		packet[1] = 0x88;
 		packet[2] = total;
 		packet[3] = p;
-		packet[4] = 0x10 + chunk.length;
 
-		for (let i = 0; i < chunk.length; i++) { packet[5 + i] = chunk[i]; }
+		const start = p * 14;
+		const len = Math.min(14, stream.length - start);
+		packet[4] = 0x10 + len;
+
+		for (let i = 0; i < len; i++) { packet[5 + i] = stream[start + i]; }
 
 		packet[19] = checksum(packet);
 		device.write(packet, 20);
-		device.pause(delay);
+
+		if (p < total - 1) { device.pause(2); } // spread packets so the link never bursts
 	}
+
+	return total;
 }
 
 function writeSolid(rgb) {
@@ -199,7 +309,24 @@ function writeSolid(rgb) {
 	packet[7] = rgb[2];
 	packet[19] = checksum(packet);
 	device.write(packet, 20);
-	device.pause(1);
+}
+
+function logStats(packets, colors, ms) {
+	stats.frames++;
+	stats.packets += packets;
+	stats.colors += colors;
+	stats.sendMs += ms;
+
+	const now = Date.now();
+
+	if (now - stats.since >= 5000) {
+		if (debugStats === true || debugStats === "true") {
+			const s = (now - stats.since) / 1000;
+			device.log(`AULA F99 2.4G: ${(stats.frames / s).toFixed(1)} fps sent, ${(stats.packets / stats.frames).toFixed(1)} pkt/frame, ${(stats.colors / stats.frames).toFixed(1)} colors/frame, ${(stats.sendMs / stats.frames).toFixed(1)} ms/frame`);
+		}
+
+		stats.since = now; stats.frames = 0; stats.packets = 0; stats.colors = 0; stats.sendMs = 0;
+	}
 }
 
 function checksum(packet) {
