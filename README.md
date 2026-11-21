@@ -29,7 +29,9 @@ Over the 2.4 GHz receiver the keyboard enumerates as **`3554:FA09`** ("2.4G Wire
 - Protocol: 20-byte output reports on interface 1, usage page `0xFF02`. Per-key payload is a stream of `[R, G, B, count, keycodes…]` groups split across packets. Based on community reverse engineering in [OpenRGB issue #5166](https://gitlab.com/CalcProgrammer1/OpenRGB/-/work_items/5166).
 - The receiver keycodes are the same values as the wired SinoWealth F99 LED indexes, so the same layout is used on both connections.
 - The 2.4G link is the bottleneck (measured, see [`diagnostics/2.4g-receiver-measurements.txt`](diagnostics/2.4g-receiver-measurements.txt)): animation stays smooth only with frames of up to ~10 packets and below ~230 packets/s. A frame with a unique color per key would need ~38 packets.
-- So each frame is reduced to an **adaptive palette** (median cut) that fits a packet budget, and frames are spaced to ~180 packets/s (~18 fps at 10 packets).
+- So each frame is reduced to an **adaptive palette** (median cut) that fits a packet budget, and frames are paced by size (≤ ~230 packets/s).
+- SignalRGB sleeps ~33 ms after every Render by default; since a 10-packet frame already blocks ~28 ms in `device.write`, the plugin calls `device.setFrameRateTarget(60)` to get ~21 fps instead of ~16 fps. SignalRGB marks that API as development-only.
+- Even so, 2.4G tops out around ~21 fps (wired: ~44 fps), so fast effects look less fluid than on the cable. Dropping to 8 packets did not change it, which points at the keyboard/radio itself.
 - Device settings:
   - **2.4G Smoothness / Colors**: packet budget per frame. *Balanced (10 packets)* is the default; *Smoothest (8)* is safest; *More colors (13)* may stutter.
   - **2.4G Log Stats**: logs fps, packets/frame and palette size to the device console every 5 s.

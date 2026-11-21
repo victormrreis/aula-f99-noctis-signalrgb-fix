@@ -52,9 +52,11 @@ const BUDGETS = {
 };
 const DEFAULT_BUDGET = "Balanced (10 packets)";
 const MIN_FRAME_MS = 40;    // never more than ~25 fps
-// Calibrated: the link stays smooth below ~230 packets/s. Keep ~180/s for headroom by
-// spacing frames according to their size.
-const PACKET_INTERVAL_MS = 5.5;
+// Calibrated: the link stays smooth below ~230 packets/s (10 packets at ~22 fps was smooth).
+// Frames are spaced by their size; inside a frame packets go back to back, because
+// device.write already blocks ~2.5 ms per packet in SignalRGB.
+const PACKET_INTERVAL_MS = 4.4;
+const MAX_WAIT_MS = 20;     // wait inside Render up to this long to hit the target time
 let nextFrameTime = 0;
 
 const F99 = {
@@ -90,13 +92,19 @@ const BLACK_LEVEL = 6;      // channels this dark are treated as off (saves pack
 
 let lastFrameKey = "";
 let lastSendTime = 0;
-const stats = { since: 0, frames: 0, packets: 0, colors: 0, sendMs: 0 };
+const stats = { since: 0, frames: 0, packets: 0, colors: 0, sendMs: 0, renders: 0, gapMs: 0, lastRenderEnd: 0 };
 
 export function Initialize() {
 	device.setName("AULA F99 Noctis (2.4G)");
 	device.setSize(F99.size);
 	device.setControllableLeds(F99.vLedNames, F99.vLedPositions);
 	device.setImageFromUrl("https://assets.signalrgb.com/devices/brands/aula/keyboards/f99.png");
+
+	// SignalRGB sleeps 1000/target ms after every Render (default ~30 -> ~33 ms idle).
+	// A 10-packet frame already blocks ~28 ms in device.write, so at the default the
+	// keyboard only got ~16 fps. At 60 the cycle is ~45 ms (~22 fps), which is what
+	// animated smoothly on hardware; the packet pacing below still caps the link rate.
+	device.setFrameRateTarget(60);
 
 	const model = queryModel();
 	device.log(`AULA F99 2.4G: model ID ${model === null ? "unknown" : "0x" + model.toString(16).toUpperCase()}, per-key, ${F99.vLeds.length} keys`);
@@ -106,7 +114,13 @@ export function Initialize() {
 }
 
 export function Render() {
+	const start = Date.now();
+
+	if (stats.lastRenderEnd) { stats.gapMs += start - stats.lastRenderEnd; }
+
+	stats.renders++;
 	sendFrame();
+	stats.lastRenderEnd = Date.now();
 }
 
 export function Shutdown(SystemSuspending) {
@@ -218,8 +232,15 @@ function palettize(lit, maxColors) {
 }
 
 function sendFrame(overrideColor, force) {
-	if (!force && Date.now() < nextFrameTime) {
-		return;
+	if (!force) {
+		const wait = nextFrameTime - Date.now();
+
+		// SignalRGB calls Render on its own fixed tick (~30 ms). Skipping a tick that
+		// lands just before the target time halves the frame rate, so wait out a short
+		// remainder instead and keep the pacing exact.
+		if (wait > MAX_WAIT_MS) { return; }
+
+		if (wait > 0) { device.pause(wait); }
 	}
 
 	const lit = readColors(overrideColor);
@@ -290,8 +311,6 @@ function writePerKey(stream) {
 
 		packet[19] = checksum(packet);
 		device.write(packet, 20);
-
-		if (p < total - 1) { device.pause(2); } // spread packets so the link never bursts
 	}
 
 	return total;
@@ -322,10 +341,10 @@ function logStats(packets, colors, ms) {
 	if (now - stats.since >= 5000) {
 		if (debugStats === true || debugStats === "true") {
 			const s = (now - stats.since) / 1000;
-			device.log(`AULA F99 2.4G: ${(stats.frames / s).toFixed(1)} fps sent, ${(stats.packets / stats.frames).toFixed(1)} pkt/frame, ${(stats.colors / stats.frames).toFixed(1)} colors/frame, ${(stats.sendMs / stats.frames).toFixed(1)} ms/frame`);
+			device.log(`AULA F99 2.4G: ${(stats.frames / s).toFixed(1)} fps sent, ${(stats.packets / stats.frames).toFixed(1)} pkt/frame, ${(stats.colors / stats.frames).toFixed(1)} colors/frame, ${(stats.sendMs / stats.frames).toFixed(1)} ms/frame, ${(stats.renders / s).toFixed(1)} Render calls/s, ${(stats.gapMs / Math.max(1, stats.renders)).toFixed(1)} ms idle between calls`);
 		}
 
-		stats.since = now; stats.frames = 0; stats.packets = 0; stats.colors = 0; stats.sendMs = 0;
+		stats.since = now; stats.frames = 0; stats.packets = 0; stats.colors = 0; stats.sendMs = 0; stats.renders = 0; stats.gapMs = 0;
 	}
 }
 

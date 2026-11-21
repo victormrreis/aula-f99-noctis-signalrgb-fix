@@ -36,3 +36,12 @@ Plugin settings derived from this
   - 2 ms pause between packets inside a frame
   - solid command only used for an all-black frame
   Result in SignalRGB: smooth animation (confirmed by the user).
+
+Inside SignalRGB (device console, 2.4G Log Stats)
+  default render target:        15.7 fps sent, 28.4 ms in device.write per 10-packet frame,
+                                33.7 ms idle between Render calls (SignalRGB sleeps ~1000/30 after Render)
+  with 2 ms pause per packet:   12.4 fps (45 ms writing) -> pause removed
+  Canvas Render Framerate 60:   no change (device scheduler is separate)
+  device.setFrameRateTarget(60): 21.3 fps, 16.7 ms idle -> current setting
+  8 vs 10 packets per frame:    no visible difference reported -> remaining stutter is the 2.4G
+                                keyboard/radio itself (~21 fps vs ~44 fps wired)

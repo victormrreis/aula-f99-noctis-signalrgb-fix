@@ -29,7 +29,9 @@ O [`plugins/OEM_Keyboard_Wireless_Controller.js`](plugins/OEM_Keyboard_Wireless_
 - Protocolo: relatórios de saída de 20 bytes na interface 1, usage page `0xFF02`. As cores vão em grupos `[R, G, B, quantidade, códigos das teclas…]` divididos em vários pacotes. Baseado na engenharia reversa da comunidade na [issue #5166 do OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB/-/work_items/5166).
 - Os códigos das teclas no receptor são os mesmos índices de LED do F99 com fio, então o layout é o mesmo nas duas conexões.
 - O gargalo é o rádio 2.4G (medido, veja [`diagnostics/2.4g-receiver-measurements.txt`](diagnostics/2.4g-receiver-measurements.txt)): a animação só fica fluida com quadros de até ~10 pacotes e abaixo de ~230 pacotes/s. Uma cor diferente em cada tecla precisaria de ~38 pacotes.
-- Por isso cada quadro vira uma **paleta adaptativa** (median cut) que cabe num orçamento de pacotes, e os quadros são espaçados para ~180 pacotes/s (~18 quadros/s com 10 pacotes).
+- Por isso cada quadro vira uma **paleta adaptativa** (median cut) que cabe num orçamento de pacotes, e os quadros são espaçados pelo tamanho (≤ ~230 pacotes/s).
+- O SignalRGB espera ~33 ms depois de cada Render por padrão; como um quadro de 10 pacotes já leva ~28 ms em `device.write`, o plugin chama `device.setFrameRateTarget(60)` e sobe de ~16 para ~21 quadros/s. O SignalRGB marca essa função como de desenvolvimento.
+- Mesmo assim o 2.4G fica em ~21 quadros/s (cabo: ~44), então efeitos rápidos ficam menos fluidos que no cabo. Baixar para 8 pacotes não mudou nada, o que aponta para o próprio teclado/rádio.
 - Opções do aparelho:
   - **2.4G Smoothness / Colors**: orçamento de pacotes por quadro. *Balanced (10 packets)* é o padrão; *Smoothest (8)* é o mais seguro; *More colors (13)* pode travar.
   - **2.4G Log Stats**: registra quadros/s, pacotes por quadro e tamanho da paleta no console do aparelho a cada 5 s.
